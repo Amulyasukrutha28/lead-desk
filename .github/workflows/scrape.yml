@@ -33,8 +33,8 @@ jobs:
           fi
       - name: Search and save
         env:
-          APIFY_TOKEN: apify_api_HVyOtz8Yaj3wGLfrv2MmCrA6NiCpgr0kDYKH
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           APIFY_ACTOR_ID: fatihtahta/reddit-scraper-search-fast
-          SUPABASE_URL: https://pkilujzutditdcweirmu.supabase.co
-          SUPABASE_KEY: sb_secret_DO6Yq6nmWUfPjJj9L4vnfg_2xtgw2Eq
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python apify_source.py
