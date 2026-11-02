@@ -1,0 +1,9 @@
+.env
+.env.*
+!.env.example
+node_modules/
+.vercel/
+apify_last_results.json
+__pycache__/
+*.log
+*.pkl

@@ -1,0 +1,9 @@
+{
+  "name": "lead-desk-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private review queue for Reddit leads. Shows drafts; a person posts them by hand.",
+  "engines": { "node": ">=20" },
+  "scripts": { "test": "node --test" },
+  "dependencies": { "@supabase/supabase-js": "^2.45.4" }
+}

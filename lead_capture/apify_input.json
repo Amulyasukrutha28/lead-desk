@@ -1,0 +1,28 @@
+{
+  "sort": "new",
+  "timeframe": "month",
+  "scrapeComments": false,
+  "includeNsfw": false,
+  "maxPosts": 50,
+  "subredditName": "r/hyderabadrealestate",
+  "subredditKeywords": [
+    "looking for plot",
+    "buy flat",
+    "2bhk",
+    "3bhk",
+    "villa",
+    "budget suggestions",
+    "invest property",
+    "Gachibowli",
+    "Kokapet",
+    "Shamshabad",
+    "Tellapur",
+    "Kondapur",
+    "rent apartment",
+    "commercial space",
+    "RERA",
+    "builder review"
+  ],
+  "subredditSort": "new",
+  "subredditTimeframe": "month"
+}

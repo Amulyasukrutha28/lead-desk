@@ -1,0 +1,44 @@
+# Searches Reddit on a schedule and saves new buyer posts to Supabase.
+# It uses your existing lead_capture/apify_source.py and sends nothing to anyone but a Telegram alert.
+#
+# Repo layout this expects:
+#   lead_capture/      <- your folder (apify_source.py, leads.py, apify_input.json, requirements ...)
+#   dashboard/         <- this dashboard
+#   .github/workflows/scrape.yml
+
+name: Search Reddit for buyer posts
+
+on:
+  schedule:
+    - cron: "0 */3 * * *"      # every 3 hours (UTC). Each run uses Apify credit, so start slow.
+  workflow_dispatch: {}         # lets you press "Run workflow" by hand to test
+
+concurrency:
+  group: reddit-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: lead_capture
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install packages
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install apify-client supabase python-dotenv requests; fi
+      - name: Search and save
+        env:
+          # Add every name below as a repository secret (Settings -> Secrets and variables -> Actions).
+          # Use the SAME variable names as in your local lead_capture/.env, and add any others it has.
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python apify_source.py

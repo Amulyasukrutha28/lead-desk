@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Lead Desk</title>
+<style>
+:root{
+  --paper:#EDEFEC; --paper-2:#E3E6E2; --ink:#1A1E22; --ink-2:#4A5158; --line:#1A1E22;
+  --accent:#5C2D91; --accent-soft:rgba(92,45,145,.13); --hatch:rgba(26,30,34,.28);
+  --warn:#8A5A00; --bad:#9B1C1C; --ok:#1F6B3A; --focus:#0B57D0;
+  --display:"Bahnschrift","DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{--paper:#151A1D;--paper-2:#1D2327;--ink:#E9ECE8;--ink-2:#A6AEB3;--line:#E9ECE8;--accent:#B58CE6;--accent-soft:rgba(181,140,230,.16);--hatch:rgba(233,236,232,.28);--warn:#E6B65C;--bad:#F08A8A;--ok:#7BD59A;--focus:#8AB4F8}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16.5px;line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:0 18px 60px}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+h1,h2{font-family:var(--display);font-weight:600;font-variation-settings:"wdth" 80;line-height:1.1;margin:0}
+h1{font-size:1.8rem} h2{font-size:1.4rem}
+p{margin:0 0 .9em;max-width:64ch}
+button,textarea,input{font:inherit;color:inherit}
+[hidden]{display:none!important}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 0;border-bottom:2px solid var(--line)}
+.muted{color:var(--ink-2);font-size:.93rem}
+.btn{background:var(--ink);color:var(--paper);border:2px solid var(--ink);padding:8px 16px;cursor:pointer}
+.btn.alt{background:transparent;color:var(--ink)}
+.btn.sm{padding:3px 10px;font-size:.92rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input[type=email],input[type=password]{width:100%;background:var(--paper);border:2px solid var(--line);padding:9px 10px}
+label.f{display:block;margin-bottom:12px}
+label.f span{display:block;font-size:.93rem;color:var(--ink-2);margin-bottom:3px}
+textarea{width:100%;min-height:110px;resize:vertical;background:var(--paper);border:2px solid var(--line);padding:8px 10px}
+.login{max-width:380px;margin:60px auto 0;border:2px solid var(--line);padding:22px;background:var(--paper)}
+.login h2{margin-bottom:14px}
+.error{color:var(--bad);margin:8px 0 0;font-size:.95rem}
+.status{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin:18px 0 10px}
+.counter{font-family:var(--display);font-variation-settings:"wdth" 80;font-size:1.25rem}
+.fresh{background:var(--accent-soft);border:2px solid var(--accent);padding:8px 12px;margin-bottom:12px;cursor:pointer;width:100%;text-align:left}
+.post{border:2px solid var(--line);background:var(--paper);margin-bottom:16px}
+.post header{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:8px 12px;background:var(--paper-2);border-bottom:2px solid var(--line)}
+.post .body{padding:12px}
+.post .text{white-space:pre-wrap;max-height:11em;overflow:auto;border-left:4px solid var(--hatch);padding-left:10px;margin-bottom:12px}
+.post.just-done{opacity:.5}
+.tag{border:1.5px solid var(--line);padding:0 8px;font-size:.85rem}
+.tag.warn{color:var(--warn);border-color:var(--warn)}
+.empty{border:2px dashed var(--line);padding:18px}
+.hint{font-size:.9rem;color:var(--ink-2);margin:6px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><h1>Lead Desk</h1><div class="row"><span class="muted" id="who"></span><button class="btn alt sm" id="signout" hidden>Sign out</button></div></div>
+
+  <section id="loginView" class="login" hidden>
+    <h2>Sign in</h2>
+    <form id="loginForm">
+      <label class="f"><span>Email</span><input type="email" id="email" autocomplete="username" required></label>
+      <label class="f"><span>Password</span><input type="password" id="password" autocomplete="current-password" required></label>
+      <button class="btn" type="submit">Sign in</button>
+      <p class="error" id="loginError" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="appView" hidden>
+    <div class="status">
+      <span class="counter" id="left">Loading…</span>
+      <span class="muted" id="updated"></span>
+    </div>
+    <p class="muted">Each post comes with a draft. Edit it, copy it, post it yourself on Reddit, then press “I replied”. Nothing is posted from this page.</p>
+    <button class="fresh" id="fresh" hidden></button>
+    <p class="error" id="appError" role="alert"></p>
+    <div id="queue"></div>
+  </section>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+const CFG = window.LEAD_DESK || {};
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+let sb = null, session = null, timer = null;
+const drafts = new Map();      // edits the agent made, kept across refreshes
+const seen = new Set();        // ids already shown, to spot new posts
+let firstLoad = true, pendingNew = [], lastData = null;
+
+function show(view) {
+  $('#loginView').hidden = view !== 'login';
+  $('#appView').hidden = view !== 'app';
+  $('#signout').hidden = view !== 'app';
+  $('#who').textContent = view === 'app' && session ? session.user.email : '';
+}
+
+async function api(path, options = {}) {
+  const res = await fetch(path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + session.access_token },
+  });
+  let body = {};
+  try { body = await res.json(); } catch (e) { /* not json */ }
+  if (res.status === 401) { await signOut(); throw new Error(body.error || 'Sign in again.'); }
+  if (!res.ok) throw new Error(body.error || 'Something went wrong (' + res.status + ').');
+  return body;
+}
+
+function render(data) {
+  lastData = data;
+  const left = data.left;
+  $('#left').textContent = left > 0
+    ? left + (left === 1 ? ' reply left today' : ' replies left today') + (data.pending ? ' · ' + data.pending + ' waiting' : '')
+    : (data.reason || 'Daily limit reached.');
+  $('#updated').textContent = 'Updated ' + new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+  const box = $('#queue');
+  if (!data.posts.length) {
+    box.innerHTML = '<div class="empty">' + (data.reason ? esc(data.reason) : 'Nothing to answer right now. New posts appear here after each search.') + '</div>';
+    return;
+  }
+  box.innerHTML = data.posts.map((p) => {
+    const text = drafts.has(p.id) ? drafts.get(p.id) : p.draft;
+    return '<article class="post" data-id="' + p.id + '"><header><span><b>' + (p.subreddit ? 'r/' + esc(p.subreddit) : 'Reddit') + '</b> · ' + esc(p.author || 'unknown') +
+      '</span><span class="muted">Intent ' + esc(p.score ?? '-') + '</span></header><div class="body">' +
+      '<div class="text">' + esc(p.post) + '</div>' +
+      '<label class="muted" for="d' + p.id + '">Draft public reply. Edit it before posting.</label>' +
+      '<textarea id="d' + p.id + '" data-id="' + p.id + '">' + esc(text) + '</textarea>' +
+      (p.brandOk ? '<p class="hint">This subreddit allows mentioning the business. Check its rules first.</p>' : '<p class="hint">Advice only. Do not mention the business here.</p>') +
+      '<div class="row" style="margin-top:10px">' +
+        '<button class="btn sm" data-act="open">Copy draft and open Reddit</button>' +
+        '<button class="btn alt sm" data-act="replied">I replied</button>' +
+        '<button class="btn alt sm" data-act="skipped">Skip</button>' +
+      '</div></div></article>';
+  }).join('');
+}
+
+async function load(manual) {
+  if (!session) return;
+  if (!manual && document.activeElement && document.activeElement.tagName === 'TEXTAREA') return; // do not disturb typing
+  try {
+    const data = await api('/api/queue');
+    $('#appError').textContent = '';
+    const fresh = data.posts.filter((p) => !seen.has(p.id));
+    data.posts.forEach((p) => seen.add(p.id));
+    if (!firstLoad && fresh.length) {
+      pendingNew = pendingNew.concat(fresh);
+      const n = pendingNew.length;
+      const b = $('#fresh');
+      b.hidden = false;
+      b.textContent = n + (n === 1 ? ' new post' : ' new posts') + ' since you last looked. Show them.';
+      document.title = '(' + n + ') Lead Desk';
+      lastData = data;
+      return;
+    }
+    firstLoad = false;
+    render(data);
+  } catch (e) {
+    $('#appError').textContent = e.message;
+  }
+}
+
+$('#fresh').addEventListener('click', () => {
+  pendingNew = []; $('#fresh').hidden = true; document.title = 'Lead Desk';
+  if (lastData) render(lastData);
+});
+
+$('#queue').addEventListener('input', (e) => {
+  if (e.target.matches('textarea')) drafts.set(Number(e.target.dataset.id), e.target.value);
+});
+
+$('#queue').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const card = btn.closest('.post');
+  const id = Number(card.dataset.id);
+  const post = lastData && lastData.posts.find((p) => p.id === id);
+  const textarea = card.querySelector('textarea');
+  if (btn.dataset.act === 'open') {
+    try { await navigator.clipboard.writeText(textarea.value); }
+    catch (err) { textarea.select(); document.execCommand('copy'); }
+    btn.textContent = 'Copied. Reddit opened in a new tab';
+    if (post && post.url) window.open(post.url, '_blank', 'noopener');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    await api('/api/mark', { method: 'POST', body: JSON.stringify({ id, action: btn.dataset.act }) });
+    drafts.delete(id);
+    card.classList.add('just-done');
+    $('#appError').textContent = '';
+    await load(true);
+  } catch (err) {
+    btn.disabled = false;
+    $('#appError').textContent = err.message;
+  }
+});
+
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#loginError').textContent = '';
+  const { data, error } = await sb.auth.signInWithPassword({ email: $('#email').value.trim(), password: $('#password').value });
+  if (error) { $('#loginError').textContent = 'Email or password is wrong.'; return; }
+  session = data.session; $('#password').value = '';
+  start();
+});
+
+async function signOut() {
+  clearInterval(timer);
+  if (sb) await sb.auth.signOut();
+  session = null; firstLoad = true; seen.clear(); pendingNew = []; drafts.clear();
+  show('login');
+}
+$('#signout').addEventListener('click', signOut);
+
+function start() {
+  show('app');
+  load(true);
+  clearInterval(timer);
+  timer = setInterval(() => { if (!document.hidden) load(false); }, (CFG.refreshSeconds || 60) * 1000);
+}
+
+(async function init() {
+  if (!window.supabase || !CFG.supabaseUrl || CFG.supabaseUrl.includes('YOUR-PROJECT')) {
+    show('login'); $('#loginError').textContent = 'Setup needed: fill in config.js with the Supabase URL and publishable key.'; return;
+  }
+  sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabasePublishableKey);
+  sb.auth.onAuthStateChange((event, s) => { if (s) session = s; });   // keeps the token fresh
+  const { data } = await sb.auth.getSession();
+  if (data.session) { session = data.session; start(); } else show('login');
+})();
+</script>
+</body>
+</html>
