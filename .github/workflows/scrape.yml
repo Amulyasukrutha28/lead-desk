@@ -36,5 +36,5 @@ jobs:
           APIFY_TOKEN: apify_api_HVyOtz8Yaj3wGLfrv2MmCrA6NiCpgr0kDYKH
           APIFY_ACTOR_ID: fatihtahta/reddit-scraper-search-fast
           SUPABASE_URL: https://pkilujzutditdcweirmu.supabase.co
-          SUPABASE_KEY: sb_secret_31w4uwQQQRfu_8F3h81gjA_XMYWEr_7
+          SUPABASE_KEY: sb_secret_DO6Yq6nmWUfPjJj9L4vnfg_2xtgw2Eq
         run: python apify_source.py
