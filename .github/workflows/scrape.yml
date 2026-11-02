@@ -34,7 +34,7 @@ jobs:
       - name: Search and save
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
+          APIFY_ACTOR_ID: fatihtahta/reddit-scraper-search-fast
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
         run: python apify_source.py
