@@ -1,10 +1,5 @@
 # Searches Reddit on a schedule and saves new buyer posts to Supabase.
-# It uses your existing lead_capture/apify_source.py and sends nothing to anyone but a Telegram alert.
-#
-# Repo layout this expects:
-#   lead_capture/      <- your folder (apify_source.py, leads.py, apify_input.json, requirements ...)
-#   dashboard/         <- this dashboard
-#   .github/workflows/scrape.yml
+# It uses lead_capture/apify_source.py and posts nothing to Reddit.
 
 name: Search Reddit for buyer posts
 
@@ -31,14 +26,15 @@ jobs:
           python-version: "3.12"
       - name: Install packages
         run: |
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; else pip install apify-client supabase python-dotenv requests; fi
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            pip install apify-client supabase python-dotenv requests numpy scikit-learn anthropic
+          fi
       - name: Search and save
         env:
-          # Add every name below as a repository secret (Settings -> Secrets and variables -> Actions).
-          # Use the SAME variable names as in your local lead_capture/.env, and add any others it has.
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          APIFY_ACTOR_ID: ${{ secrets.APIFY_ACTOR_ID }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python apify_source.py
