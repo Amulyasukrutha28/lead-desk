@@ -63,8 +63,8 @@ AREAS = [a.strip().lower() for a in os.getenv(
 TITLE_FIELDS = ("title", "postTitle", "name")
 BODY_FIELDS = ("body", "text", "selftext", "content", "description", "postBody")
 URL_FIELDS = ("url", "postUrl", "permalink", "link")
-ID_FIELDS = ("redditId", "id", "parsedId", "postId", "post_id", "tweetId", "name")
-AUTHOR_FIELDS = ("authorName", "authorUsername", "username", "author", "user")
+ID_FIELDS = ("id", "parsedId", "postId", "post_id", "name")
+AUTHOR_FIELDS = ("username", "author", "user", "authorName")
 
 INTENT_PHRASES = [
     "looking for", "looking to buy", "looking to rent", "want to buy", "want to rent",
@@ -132,31 +132,85 @@ def intent_score(text: str, areas=None) -> int:
 
 # -------------------------------------------------------------- public reply --
 
-def suggest_public_reply(post: dict, matches: list[dict]) -> str:
-    """A helpful, non-pushy PUBLIC reply for the agent to edit and post by hand."""
-    reply = ("Happy to help. To narrow it down, could you share your budget range and "
-             "preferred area? ")
-    if matches:
-        names = ", ".join(sorted({m["project_name"] for m in matches if m.get("project_name")})[:2])
-        if names:
-            reply += f"We work with options such as {names} - glad to share details by message once you tell us what you need. "
-    reply += f"- {L.BRAND_NAME}"
-    return reply
+_NOT_OFFERABLE = ("sold", "booked", "hold", "not available", "unavailable", "withdrawn")
+
+
+def offerable(matches: list[dict]) -> list[dict]:
+    """Only listings we can honestly offer: drops sold, booked and on-hold ones."""
+    out = []
+    for m in matches or []:
+        status = str(m.get("status") or "").lower()
+        if any(word in status for word in _NOT_OFFERABLE):
+            continue
+        if m.get("project_name"):
+            out.append(m)
+    return out
+
+
+def subreddit_of(url) -> str | None:
+    m = re.search(r"/r/([A-Za-z0-9_]+)/", url or "")
+    return m.group(1).lower() if m else None
+
+
+def _listing_line(m: dict) -> str:
+    parts = [m.get("project_name"), m.get("type_or_bhk"), m.get("location")]
+    line = ", ".join(p for p in parts if p)
+    extras = [f"{label} {m[key]}" for label, key in (("price", "price_raw"), ("size", "size_raw")) if m.get(key)]
+    return line + (f" ({'; '.join(extras)})" if extras else "")
+
+
+def _llm_public_reply(post: dict, options: list[dict]) -> str:
+    from anthropic import Anthropic
+
+    listings = "\n".join(f"{i}. {_listing_line(m)}" for i, m in enumerate(options, 1))
+    prompt = f"""Write a PUBLIC Reddit reply from a Hyderabad property dealer to someone looking to buy.
+
+Their post:
+{(post.get('title') or '')}
+{(post.get('body') or '')[:700]}
+
+Listings we can suggest (the ONLY facts you may use):
+{listings}
+
+Rules:
+- 60 to 90 words, friendly and plain, no emojis, no markdown, no hype.
+- Answer their actual question first in one sentence, without claims you cannot support from the post.
+- Then mention at most two of the listings above that fit what they asked. Quote price and size text exactly as written. Never convert units, add totals or guess.
+- Do not invent amenities, returns, appreciation, possession dates, discounts or urgency. Do not say anything is guaranteed.
+- Do not include a phone number, email or link. Invite them to send a message if they want details.
+- Output the reply text only. Do not sign it."""
+    client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    response = client.messages.create(
+        model=L.CLAUDE_MODEL, max_tokens=300, temperature=0.3,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return "".join(b.text for b in response.content if b.type == "text").strip()
+
+
+def _template_public_reply(options: list[dict]) -> str:
+    lines = "; ".join(_listing_line(m) for m in options[:2])
+    return ("Happy to help. Based on what you describe, these may be worth a look: " + lines +
+            ". If you'd like details, send me a message with your budget and preferred area.")
+
+
+def suggest_public_reply(post: dict, matches: list[dict]) -> str | None:
+    """A PUBLIC reply drafted ONLY from our own available listings, for the agent to
+    edit and post by hand. Returns None when no listing can honestly be offered, so the
+    dashboard falls back to plain advice. It never contains a phone number."""
+    options = offerable(matches)[:3]
+    if not options:
+        return None
+    body = None
+    if os.getenv("ANTHROPIC_API_KEY"):
+        try:
+            body = _llm_public_reply(post, options)
+        except Exception:
+            logger.exception("LLM public reply failed; using template")
+    body = body or _template_public_reply(options)
+    return f"{body}\n\n- {L.BRAND_NAME}"
 
 
 # ------------------------------------------------------------------- Apify ---
-
-def dataset_id_of(run) -> str:
-    """Older apify-client versions return the run as a dict; newer ones return an
-    object with snake_case attributes. Accept both."""
-    if isinstance(run, dict):
-        return run["defaultDatasetId"]
-    for attr in ("default_dataset_id", "defaultDatasetId"):
-        value = getattr(run, attr, None)
-        if value:
-            return value
-    raise SystemExit("Could not find the dataset id on the Apify run result.")
-
 
 def run_actor(actor_id: str, run_input: dict, limit: int):
     """Runs the Actor and returns up to `limit` result rows. Uses Apify credit."""
@@ -168,9 +222,7 @@ def run_actor(actor_id: str, run_input: dict, limit: int):
         raise SystemExit("Set APIFY_TOKEN in .env (Apify Console -> Settings -> Integrations).")
     client = ApifyClient(APIFY_TOKEN)
     run = client.actor(actor_id).call(run_input=run_input)
-    if run is None:
-        raise SystemExit("The Apify run returned nothing. Check the run in Apify Console -> Runs.")
-    return list(client.dataset(dataset_id_of(run)).iterate_items(limit=limit))
+    return list(client.dataset(run["defaultDatasetId"]).iterate_items(limit=limit))
 
 
 def load_input() -> dict:
@@ -214,8 +266,14 @@ def process_items(items: list[dict], store, *, min_score=MIN_SCORE, dry_run=Fals
         except Exception:
             logger.exception("listing match failed; continuing without matches")
             matches = []
+        options = offerable(matches)[:3]
+        lead["raw_payload"]["subreddit"] = subreddit_of(post["url"])
+        lead["raw_payload"]["matches"] = [
+            {k: m.get(k) for k in ("project_name", "type_or_bhk", "location", "price_raw", "size_raw", "status")}
+            for m in options]
+        reply = suggest_public_reply(post, options)
         extra = (f"\nPOST: {post['url']}\nIntent score: {score}\n\n"
-                 f"Suggested PUBLIC reply (edit before posting):\n{suggest_public_reply(post, matches)}\n"
+                 f"Suggested PUBLIC reply (edit before posting):\n{reply or '(no listing matched - advice only)'}\n"
                  "Do not DM unless they reply or ask you to.")
 
         def notifier(text, dry_run=False, _extra=extra):
@@ -223,6 +281,12 @@ def process_items(items: list[dict], store, *, min_score=MIN_SCORE, dry_run=Fals
             return L.notify_agent(text + _extra, dry_run=dry_run)
 
         result = L.process_lead(lead, store, matcher=lambda l, m=matches: m, notifier=notifier, dry_run=dry_run)
+        if result["status"] != "duplicate":
+            try:
+                store.update(result["lead_id"], {"matched_projects": [m["project_name"] for m in options],
+                                                 "draft_reply": reply})
+            except Exception:
+                logger.exception("could not save the listing-based draft; the post is still saved")
         stats["duplicate" if result["status"] == "duplicate" else "saved"] += 1
     return stats
 
@@ -248,10 +312,6 @@ if __name__ == "__main__":
         if not APIFY_ACTOR_ID:
             raise SystemExit("Set APIFY_ACTOR_ID in .env, e.g. APIFY_ACTOR_ID=username~actor-name")
         items = run_actor(APIFY_ACTOR_ID, load_input(), args.limit)
-        if not items:
-            raise SystemExit("The run finished but returned 0 rows. Open the run in Apify Console -> Runs and read "
-                             "its Log: usually the input in apify_input.json has the wrong field names or is empty. "
-                             "Copy the JSON from the Actor's Input tab and edit its search terms.")
         Path("apify_last_results.json").write_text(json.dumps(items, indent=2, default=str), encoding="utf-8")
         print(f"Got {len(items)} rows (saved to apify_last_results.json - re-run free with --from-file).")
         if items:
