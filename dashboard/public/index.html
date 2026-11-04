@@ -47,6 +47,7 @@ textarea{width:100%;min-height:110px;resize:vertical;background:var(--paper);bor
 .post .body{padding:12px}
 .post .text{white-space:pre-wrap;max-height:11em;overflow:auto;border-left:4px solid var(--hatch);padding-left:10px;margin-bottom:12px}
 .post.just-done{opacity:.5}
+.matches{margin-top:10px}.matches ul{margin:4px 0 0;padding-left:18px}.matches li{margin:2px 0}
 .tag{border:1.5px solid var(--line);padding:0 8px;font-size:.85rem}
 .tag.warn{color:var(--warn);border-color:var(--warn)}
 .empty{border:2px dashed var(--line);padding:18px}
@@ -110,6 +111,14 @@ async function api(path, options = {}) {
   return body;
 }
 
+function matchList(matches) {
+  if (!matches || !matches.length) return '';
+  return '<div class="matches"><span class="muted">Matches from your listings (checked at the last search)</span><ul>' +
+    matches.map((m) => '<li>' + esc([m.project_name, m.type_or_bhk, m.location].filter(Boolean).join(', ')) +
+      (m.price_raw ? ' · ' + esc(m.price_raw) : '') + (m.size_raw ? ' · ' + esc(m.size_raw) : '') +
+      (m.status ? ' · ' + esc(m.status) : '') + '</li>').join('') + '</ul></div>';
+}
+
 function render(data) {
   lastData = data;
   const left = data.left;
@@ -130,7 +139,10 @@ function render(data) {
       '<div class="text">' + esc(p.post) + '</div>' +
       '<label class="muted" for="d' + p.id + '">Draft public reply. Edit it before posting.</label>' +
       '<textarea id="d' + p.id + '" data-id="' + p.id + '">' + esc(text) + '</textarea>' +
-      (p.brandOk ? '<p class="hint">This subreddit allows mentioning the business. Check its rules first.</p>' : '<p class="hint">Advice only. Do not mention the business here.</p>') +
+      (p.draftSource === 'listings' ? '<p class="hint">This draft suggests listings from your own data. Check the subreddit rules first.</p>'
+        : p.brandOk ? '<p class="hint">This subreddit allows mentioning the business, but no listing matched, so the draft is advice. Check its rules first.</p>'
+        : '<p class="hint">Advice only. Do not mention the business here.</p>') +
+      matchList(p.matches) +
       '<div class="row" style="margin-top:10px">' +
         '<button class="btn sm" data-act="open">Copy draft and open Reddit</button>' +
         '<button class="btn alt sm" data-act="replied">I replied</button>' +
