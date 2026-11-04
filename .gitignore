@@ -7,3 +7,4 @@ apify_last_results.json
 __pycache__/
 *.log
 *.pkl
+!lead_capture/tfidf_vectorizer.pkl
