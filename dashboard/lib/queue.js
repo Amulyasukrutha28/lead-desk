@@ -93,11 +93,15 @@ function nextPosts(rows, { now = new Date(), n = 5, cfg = config() } = {}) {
     const url = (r.raw_payload || {}).url || null;
     const sub = subredditOf(url);
     const brandOk = !!sub && cfg.brandOk.has(sub);
+    const matches = Array.isArray((r.raw_payload || {}).matches) ? r.raw_payload.matches : [];
+    // A draft that names our listings is used only where the subreddit allows the business name.
+    const useListings = brandOk && matches.length > 0 && !!r.draft_reply;
     posts.push({
       id: r.id, url, subreddit: sub, author: r.name || null,
       post: String(r.interest_text || '').slice(0, 600),
       score: (r.raw_payload || {}).intent_score ?? null,
-      brandOk, draft: draftReply(r.interest_text, brandOk, cfg.brandName),
+      brandOk, matches, draftSource: useListings ? 'listings' : 'advice',
+      draft: useListings ? r.draft_reply : draftReply(r.interest_text, brandOk, cfg.brandName),
       createdAt: r.created_at,
     });
     if (posts.length >= Math.min(n, left)) break;
