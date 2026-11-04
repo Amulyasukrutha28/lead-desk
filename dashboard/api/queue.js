@@ -14,7 +14,7 @@ function makeHandler(getDb = adminClient, getCfg = config) {
       if (who.error) return res.status(who.status).json({ error: who.error });
 
       const { data, error } = await db.from('leads')
-        .select('id,name,interest_text,status,reply_status,replied_at,created_at,raw_payload')
+        .select('id,name,interest_text,status,reply_status,replied_at,created_at,raw_payload,draft_reply')
         .eq('source', cfg.source).order('created_at', { ascending: false }).limit(500);
       if (error) return res.status(502).json({ error: 'Could not read the leads table: ' + error.message });
 
