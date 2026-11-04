@@ -222,7 +222,16 @@ def run_actor(actor_id: str, run_input: dict, limit: int):
         raise SystemExit("Set APIFY_TOKEN in .env (Apify Console -> Settings -> Integrations).")
     client = ApifyClient(APIFY_TOKEN)
     run = client.actor(actor_id).call(run_input=run_input)
-    return list(client.dataset(run["defaultDatasetId"]).iterate_items(limit=limit))
+    if run is None:
+        raise SystemExit("The Apify run did not finish. Check the run in Apify Console.")
+    # Newer apify-client versions return a Run object; older ones return a dict.
+    if isinstance(run, dict):
+        dataset_id = run.get("defaultDatasetId") or run.get("default_dataset_id")
+    else:
+        dataset_id = getattr(run, "default_dataset_id", None) or getattr(run, "defaultDatasetId", None)
+    if not dataset_id:
+        raise SystemExit("The Apify run returned no dataset id.")
+    return list(client.dataset(dataset_id).iterate_items(limit=limit))
 
 
 def load_input() -> dict:
