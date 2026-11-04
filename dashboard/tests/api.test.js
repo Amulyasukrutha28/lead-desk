@@ -57,6 +57,26 @@ test('draft is advice-only unless the subreddit allows the business name', () =>
   assert.ok(Q.draftReply('open shop', false, 'x').startsWith('For flats'));
 });
 
+test('a listing-based draft is used only where the subreddit allows the business name', () => {
+  const m = [{ project_name: 'Sample Square', type_or_bhk: '2 BHK', location: 'Kondapur', price_raw: 'Rs 92 lakh', status: 'Available' }];
+  const mk = (sub) => row(1, { draft_reply: 'We have Sample Square in Kondapur.',
+    raw_payload: { url: 'https://reddit.com/r/' + sub + '/comments/1/', intent_score: 6, matches: m } });
+  const ok = Q.nextPosts([mk('okay_sub')], { now: NOW, cfg }).posts[0];
+  assert.equal(ok.draftSource, 'listings');
+  assert.ok(ok.draft.includes('Sample Square'));
+  const no = Q.nextPosts([mk('hyderabad')], { now: NOW, cfg }).posts[0];
+  assert.equal(no.draftSource, 'advice');
+  assert.ok(!no.draft.includes('Sample Square'));      // matches still shown to the agent, never in the public text
+  assert.equal(no.matches.length, 1);
+});
+
+test('no stored matches falls back to plain advice even in an allowed subreddit', () => {
+  const r = row(2, { draft_reply: null, raw_payload: { url: 'https://reddit.com/r/okay_sub/comments/2/', intent_score: 6 } });
+  const p = Q.nextPosts([r], { now: NOW, cfg }).posts[0];
+  assert.equal(p.draftSource, 'advice');
+  assert.deepEqual(p.matches, []);
+});
+
 test('queue shows highest intent first and skips one author twice', () => {
   const rows = [row(1, { raw_payload: { url: 'https://reddit.com/r/a/comments/1/', intent_score: 4 } }),
     row(2, { raw_payload: { url: 'https://reddit.com/r/a/comments/2/', intent_score: 8 } }),
