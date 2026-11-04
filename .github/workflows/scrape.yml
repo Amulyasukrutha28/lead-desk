@@ -1,12 +1,12 @@
-# Searches Reddit on a schedule and saves new buyer posts to Supabase.
-# It uses lead_capture/apify_source.py and posts nothing to Reddit.
+# Searches Reddit on a schedule, matches each buyer post to your listings in Supabase,
+# and saves the post with a listing-based draft reply. It posts nothing to Reddit.
 
 name: Search Reddit for buyer posts
 
 on:
   schedule:
-    - cron: "0 */3 * * *"      # every 3 hours (UTC). Each run uses Apify credit, so start slow.
-  workflow_dispatch: {}         # lets you press "Run workflow" by hand to test
+    - cron: "0 */3 * * *"      # every 3 hours (UTC). Each run uses Apify credit.
+  workflow_dispatch: {}
 
 concurrency:
   group: reddit-scrape
@@ -37,4 +37,7 @@ jobs:
           APIFY_ACTOR_ID: fatihtahta/reddit-scraper-search-fast
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          BRAND_NAME: ${{ vars.BRAND_NAME }}
+          CLAUDE_MODEL: ${{ vars.CLAUDE_MODEL }}
         run: python apify_source.py
