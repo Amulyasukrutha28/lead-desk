@@ -1,0 +1,42 @@
+"""
+export_vectorizer.py - copy the search vocabulary out of tfidf_vectorizer.pkl into a JSON file
+that the Lead Desk website (Node) can read, so the Talk page searches your listings the same
+way your Python code does.
+
+Run once, in lead_capture (where tfidf_vectorizer.pkl is), and again whenever you rebuild the vectorizer:
+  python export_vectorizer.py
+It writes ../dashboard/lib/vectorizer.json. Commit that file. It holds only words and weights,
+no keys, but it is derived from your listing text, so keep the repo private.
+"""
+import json
+import pickle
+import sys
+from pathlib import Path
+
+DEFAULTS = {"lowercase": True, "strip_accents": None, "ngram_range": (1, 1), "stop_words": None,
+            "analyzer": "word", "binary": False, "norm": "l2", "use_idf": True, "sublinear_tf": False,
+            "token_pattern": r"(?u)\b\w\w+\b", "preprocessor": None, "tokenizer": None}
+
+
+def vectorizer_to_dict(vec) -> dict:
+    """Raises ValueError when the vectorizer uses settings the JavaScript version does not copy."""
+    params = vec.get_params()
+    for key, expected in DEFAULTS.items():
+        if params.get(key) != expected:
+            raise ValueError(f"vectorizer setting {key}={params.get(key)!r} is not supported "
+                             f"(expected {expected!r}). Tell your developer before using the Talk page.")
+    vocab = {term: int(i) for term, i in vec.vocabulary_.items()}
+    idf = [float(x) for x in vec.idf_]
+    if sorted(vocab.values()) != list(range(len(idf))):
+        raise ValueError("vocabulary indexes do not line up with the idf weights")
+    return {"dimensions": len(idf), "vocabulary": vocab, "idf": idf}
+
+
+if __name__ == "__main__":
+    src = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("tfidf_vectorizer.pkl")
+    out = Path(sys.argv[2]) if len(sys.argv) > 2 else Path("..") / "dashboard" / "lib" / "vectorizer.json"
+    with open(src, "rb") as f:
+        data = vectorizer_to_dict(pickle.load(f))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(data), encoding="utf-8")
+    print(f"Wrote {out} with {data['dimensions']} dimensions. Commit it, then redeploy.")
